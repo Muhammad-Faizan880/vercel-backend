@@ -1,5 +1,5 @@
 import express from "express";
-import Variant from "../models/Variant.js";
+import Variant from "../models/variant.js";
 
 const router = express.Router();
 

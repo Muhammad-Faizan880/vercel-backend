@@ -1,7 +1,7 @@
 import express from "express";
 import Stripe from "stripe";
 import { authMiddleware } from "../middleware/authMiddleware.js";
-import Variant from "../models/Variant.js";
+import Variant from "../models/variant.js";
 import dotenv from "dotenv";
 dotenv.config();
 

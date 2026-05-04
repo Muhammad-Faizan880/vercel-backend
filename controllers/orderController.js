@@ -1,5 +1,5 @@
 import Order from "../models/OrderModel.js";
-import Variant from "../models/Variant.js";
+import Variant from "../models/variant.js";
 
 // Create order after successful payment
 export const createOrder = async (req, res) => {
