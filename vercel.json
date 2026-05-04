@@ -5,7 +5,7 @@
       "src": "api/index.js",
       "use": "@vercel/node",
        "config": {
-        "installCommand": "npm install --legacy-peer-deps --production=false"
+        "installCommand": "npm install --legacy-peer-deps --production=false --include=dev"
       }
     }
   ],
