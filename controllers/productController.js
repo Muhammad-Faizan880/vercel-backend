@@ -1,5 +1,5 @@
 import Product from "../models/productModel.js";
-import Variant from "../models/Variant.js";
+import Variant from "../models/variant.js";
 
 // Create product with variants in separate table
 export const createProduct = async (req, res) => {
