@@ -150,16 +150,16 @@ export const login = async (req, res) => {
     }
 
     const token = jwt.sign(
-  {
-    userId: user._id,
-    id: user._id,
-    name: user.name,
-    email: user.email,
-    role: user.role
-  },
-  process.env.JWT_SECRET,
-  { expiresIn: "7d" }
-);
+      {
+        userId: user._id,
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" },
+    );
 
     res.status(200).json({
       message: "Login successful.",
@@ -183,5 +183,196 @@ export const logout = async (req, res) => {
   } catch (error) {
     console.error("LOGOUT ERROR:", error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+// ============= UPDATED FORGOT PASSWORD WITH RESET LINK =============
+
+// 1. FORGOT PASSWORD - Send password reset link via email
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required" });
+    }
+
+    // Check if user exists
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(404).json({ message: "Email not found" });
+    }
+
+    // Generate password reset token (valid for 15 minutes)
+    const resetToken = jwt.sign(
+      {
+        userId: user._id,
+        email: user.email,
+        purpose: "password_reset",
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" },
+    );
+
+    // Store token in database (optional but recommended for additional security)
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpire = Date.now() + 15 * 60 * 1000;
+    await user.save();
+
+    // Create reset link (adjust URL based on your frontend)
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+
+    console.log(`Reset link for ${email}: ${resetLink}`); // Debugging
+
+    // Send email with reset link
+    await sendEmail(
+      email,
+      "Password Reset Request",
+      `
+      <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
+        <h2 style="color: #333;">Password Reset Request</h2>
+        <p>Hello ${user.name},</p>
+        <p>You requested to reset your password. Click the button below to reset it:</p>
+        <a href="${resetLink}" 
+           style="display: inline-block; 
+                  background-color: #4F46E5; 
+                  color: white; 
+                  padding: 12px 24px; 
+                  text-decoration: none; 
+                  border-radius: 5px; 
+                  margin: 20px 0;">
+          Reset Password
+        </a>
+        <p>Or copy and paste this link in your browser:</p>
+        <p style="color: #4F46E5; word-break: break-all;">${resetLink}</p>
+        <p>This link will expire in 15 minutes.</p>
+        <p>If you didn't request this, please ignore this email.</p>
+        <hr />
+        <p style="color: #666; font-size: 12px;">This is an automated message, please do not reply.</p>
+      </div>
+      `,
+    );
+
+    res.json({
+      message: "Password reset link sent successfully to your email",
+      email: email,
+    });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// 2. VERIFY RESET TOKEN - Check if reset token is valid
+export const verifyResetToken = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return res.status(400).json({ message: "Reset token is required" });
+    }
+
+    // Verify token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (error) {
+      return res.status(400).json({ message: "Invalid or expired reset link" });
+    }
+
+    // Check if token is for password reset
+    if (decoded.purpose !== "password_reset") {
+      return res.status(400).json({ message: "Invalid token purpose" });
+    }
+
+    // Find user and check if token matches
+    const user = await User.findOne({
+      _id: decoded.userId,
+      resetPasswordToken: token,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res
+        .status(400)
+        .json({ message: "Reset link has expired or is invalid" });
+    }
+
+    res.json({
+      message: "Token is valid",
+      email: user.email,
+      token: token,
+    });
+  } catch (error) {
+    console.error("Verify reset token error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// 3. RESET PASSWORD - Save new password
+export const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword, confirmPassword } = req.body;
+
+    if (!token || !newPassword || !confirmPassword) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: "Passwords do not match" });
+    }
+
+    if (newPassword.length < 6) {
+      return res
+        .status(400)
+        .json({ message: "Password must be at least 6 characters" });
+    }
+
+    // Verify reset token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (error) {
+      return res
+        .status(400)
+        .json({ message: "Invalid or expired reset token" });
+    }
+
+    // Check if token is for password reset
+    if (decoded.purpose !== "password_reset") {
+      return res.status(400).json({ message: "Invalid token purpose" });
+    }
+
+    // Find user with valid reset token
+    const user = await User.findOne({
+      _id: decoded.userId,
+      resetPasswordToken: token,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res
+        .status(400)
+        .json({ message: "Reset link has expired. Please request a new one." });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update password and clear reset token fields
+    user.password = hashedPassword;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpire = null;
+    await user.save();
+
+    console.log("Password reset successful for:", user.email);
+
+    res.json({
+      message:
+        "Password reset successful! You can now login with your new password.",
+    });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    res.status(500).json({ message: "Server error: " + error.message });
   }
 };

@@ -1,35 +1,41 @@
 import mongoose from "mongoose";
 
-const userSchema = new mongoose.Schema({
+const userSchema = new mongoose.Schema(
+  {
     name: {
-        type: String,
-        required: true,
+      type: String,
+      required: true,
     },
     email: {
-        type: String,
-        required: true,
-        unique: true,
+      type: String,
+      required: true,
+      unique: true,
     },
     password: {
-        type: String,
-        required: true,
+      type: String,
+      required: true,
     },
 
     // 🔥 ADD THIS
     otp: {
-        type: String,
+      type: String,
     },
 
+ resetPasswordToken: String,
+  resetPasswordExpire: Date,
+
     isVerified: {
-        type: Boolean,
-        default: false,
+      type: Boolean,
+      default: false,
     },
 
     role: {
-        type: String,
-        enum: ["user", "admin"],
-        default: "user",
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
     },
-}, { timestamps: true });
+  },
+  { timestamps: true },
+);
 
 export default mongoose.model("User", userSchema);
